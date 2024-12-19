@@ -3,78 +3,87 @@ package kafka_reader
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
+
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 )
 
 type Config struct {
-	Brokers []string `envconfig:"KAFKA_READER_BROKERS" required:"true"`
-	Group   string   `envconfig:"KAFKA_READER_GROUP" required:"true"`
-	Topic   string   `envconfig:"KAFKA_READER_TOPIC" required:"true"`
+	Brokers            []string `envconfig:"KAFKA_READER_BROKERS" required:"true"`
+	Group              string   `envconfig:"KAFKA_READER_GROUP" required:"true"`
+	Topic              string   `envconfig:"KAFKA_READER_TOPIC" required:"true"`
+	AutoCommitInterval int      `envconfig:"KAFKA_AUTO_COMMIT_INTERVAL" required:"true"` // в секундах
+	AutoCommitEnable   bool     `envconfig:"KAFKA_AUTO_COMMIT_ENABLE" required:"true"`
 }
 
-type Reader struct {
-	cfg           Config
+type KafkaReader struct {
+	group         string
+	topic         string
 	consumerGroup sarama.ConsumerGroup
-	consumer      *Consumer
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	logger        logger.MPMLogger
 }
 
-func New(c Config) (*Reader, error) {
-
+func NewKafkaReader(c Config, logger logger.MPMLogger) (*KafkaReader, error) {
 	// Настройка конфигурации
 	config := sarama.NewConfig()
-	config.Consumer.Offsets.Initial = sarama.OffsetOldest   // Чтение с самого конца (если нет сохраненного оффсета)
-	config.Consumer.Offsets.AutoCommit.Enable = true        // Включаем автоматическое сохранение оффсетов
-	config.Consumer.Offsets.AutoCommit.Interval = 10 * 1000 // Интервал для сохранения оффсетов - 10 секунд
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest                                           // Чтение с самого начала (если нет сохраненного оффсета)
+	config.Consumer.Offsets.AutoCommit.Enable = c.AutoCommitEnable                                  // Включаем автоматическое сохранение оффсетов
+	config.Consumer.Offsets.AutoCommit.Interval = time.Duration(c.AutoCommitInterval) * time.Second // Интервал для сохранения оффсетов - 10 секунд
 
 	// Создаем клиента для consumer группы
 	consumerGroup, err := sarama.NewConsumerGroup(c.Brokers, c.Group, config)
 	if err != nil {
-		fmt.Println("Ошибка при создании consumer group: ", err)
+		return nil, err
 	}
 
-	return &Reader{
-		cfg:           c,
+	// Создание контекста для управления остановкой
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &KafkaReader{
+		group:         c.Group,
+		topic:         c.Topic,
 		consumerGroup: consumerGroup,
-		consumer:      &Consumer{},
+		ctx:           ctx,
+		cancel:        cancel,
+		logger:        logger,
 	}, nil
 }
 
-func (r *Reader) ConsumerGroupClose() {
-	r.consumerGroup.Close()
+// ConsumeMessages - запуск чтения сообщений из топика
+func (r *KafkaReader) ConsumeMessages(handler sarama.ConsumerGroupHandler) {
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+
+		// Бесконечный цикл чтения сообщений
+		for {
+			if err := r.consumerGroup.Consume(r.ctx, []string{r.topic}, handler); err != nil {
+				r.logger.Error(fmt.Sprintf("Ошибка при чтении сообщений: %v", err))
+			}
+
+			// Если контекст завершён, выходим из цикла
+			if r.ctx.Err() != nil {
+				return
+			}
+		}
+	}()
 }
 
-func (r *Reader) Consume(ctx context.Context) error {
-	err := r.consumerGroup.Consume(ctx, []string{r.cfg.Topic}, r.consumer)
-	return err
-}
-
-//func (r *Reader) GetTopic() string {
-//	return r.cfg.Topic
-//}
-
-/*************************************** Consumer **************************************/
-
-// Consumer реализует интерфейс sarama.ConsumerGroupHandler
-type Consumer struct {
-}
-
-// Setup вызывается перед началом обработки
-func (consumer *Consumer) Setup(session sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// Cleanup вызывается после завершения обработки
-func (consumer *Consumer) Cleanup(session sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// ConsumeClaim обрабатывает сообщения из партиций
-func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		fmt.Printf("Сообщение получено: topic = %s, partition = %d, offset = %d, value = %s\n",
-			message.Topic, message.Partition, message.Offset, string(message.Value))
-		// session.MarkMessage(message, "") // Сообщаем Kafka, что сообщение обработано (не нужно если автокоммит)
+func (r *KafkaReader) Close() {
+	// Отмена контекста
+	r.cancel()
+	// Ожидание завершения горутин
+	r.wg.Wait()
+	// Закрытие Consumer Group
+	if err := r.consumerGroup.Close(); err != nil {
+		r.logger.Error(fmt.Sprintf("Ошибка закрытия Consumer Group: %v", err))
 	}
-	return nil
+
+	r.logger.Info(fmt.Sprintf("KafkaConsumer завершён, Group: %s, Topic: %s", r.group, r.topic))
 }

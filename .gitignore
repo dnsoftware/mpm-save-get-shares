@@ -1,2 +1,4 @@
 .idea
 .env
+**/test.log
+app.log
