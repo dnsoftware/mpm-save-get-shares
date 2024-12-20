@@ -13,6 +13,7 @@ type ShareConsumer struct {
 
 // Setup вызывается перед началом обработки
 func (consumer *ShareConsumer) Setup(session sarama.ConsumerGroupSession) error {
+
 	return nil
 }
 
@@ -26,7 +27,7 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 	for message := range claim.Messages() {
 		fmt.Printf("Сообщение получено: topic = %s, partition = %d, offset = %d, value = %s\n",
 			message.Topic, message.Partition, message.Offset, string(message.Value))
-		// session.MarkMessage(message, "") // Сообщаем Kafka, что сообщение обработано (не нужно если автокоммит)
+		session.MarkMessage(message, "") // Сообщаем Kafka, что сообщение обработано (вызывать всегда, даже если автокоммит включен)
 	}
 	return nil
 }
