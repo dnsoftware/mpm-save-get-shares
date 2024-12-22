@@ -1,54 +1,75 @@
-package kafka_writer
+package kafka
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/kafka"
 
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_writer"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 )
 
-// Тестирование отправки шар в кафку
-// кафка должна быть запущена
-func TestWriter(t *testing.T) {
+// Тестирование отправки и получения сообщений в Кафку с использованием testcontainers
+func TestKafkaWriteRead(t *testing.T) {
+	topic := "test-by-testcontainers"
+	group := "test-group"
 
+	/********************** Настройка testcontainers ************************/
+	ctx := context.Background()
+	kafkaContainer, err := kafka.Run(ctx, "confluentinc/confluent-local:7.5.0", kafka.WithClusterID("kraftCluster"))
+	testcontainers.CleanupContainer(t, kafkaContainer)
+	require.NoError(t, err)
+
+	assertAdvertisedListeners(t, kafkaContainer)
+
+	if !strings.EqualFold(kafkaContainer.ClusterID, "kraftCluster") {
+		t.Fatalf("expected clusterID to be %s, got %s", "kraftCluster", kafkaContainer.ClusterID)
+	}
+	/******************* КОНЕЦ Настройка testcontainers **********************/
+
+	// Создаем издателя и подписчика, тестируем прием/отправку сообщения
 	filePath, err := logger.GetLoggerMainLogPath()
 	require.NoError(t, err)
 	logger.InitLogger(logger.LogLevelDebug, filePath)
-	//logger.InitLogger(logger.LogLevelProduction, filePath)
 
-	cfg := Config{
-		Brokers: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-		Topic:   "test_topic",
+	brokers, err := kafkaContainer.Brokers(ctx)
+	require.NoError(t, err)
+
+	cfg := kafka_writer.Config{
+		Brokers: brokers,
+		Topic:   topic,
 	}
 
-	writer, err := NewKafkaWriter(cfg, logger.Log())
+	writer, err := kafka_writer.NewKafkaWriter(cfg, logger.Log())
 	assert.NoError(t, err)
 	defer writer.Close()
-
-	err = writer.DeleteTopic(writer.topic)
-	assert.NoError(t, err)
 
 	// Запуск продюсера
 	writer.Start()
 
 	// Отправка сообщений
-	msgSend := fmt.Sprintf("%v", time.Now().Nanosecond())
-	writer.SendMessage("test_write", msgSend)
-	writer.Close()
+	var msgSend []string
+	msgSend = append(msgSend, fmt.Sprintf("%v", time.Now().Nanosecond()), fmt.Sprintf("%v", time.Now().Nanosecond()))
+	for _, val := range msgSend {
+		writer.SendMessage("test_write", val)
+	}
 
 	//////////////////////////////////////// читаем из топика
 	time.Sleep(2 * time.Second)
 	cfgReader := kafka_reader.Config{
-		Brokers:            []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-		Group:              constants.KafkaSharesGroup,
-		Topic:              "test_topic", // constants.KafkaSharesTopic
+		Brokers:            brokers,
+		Group:              group,
+		Topic:              topic, // constants.KafkaSharesTopic
 		AutoCommitInterval: constants.KafkaSharesAutocommitInterval,
 		AutoCommitEnable:   true,
 	}
@@ -69,9 +90,11 @@ func TestWriter(t *testing.T) {
 	}()
 
 	// Получаем сообщение
+	i := 0
 	select {
 	case msg := <-msgChan:
-		assert.Equal(t, msgSend, string(msg.Value))
+		assert.Equal(t, msgSend[i], string(msg.Value))
+		i++
 	case <-time.After(6 * time.Second):
 		t.Fatal("Таймаут при получении сообщения")
 	}
