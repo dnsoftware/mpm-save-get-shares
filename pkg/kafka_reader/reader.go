@@ -13,11 +13,11 @@ import (
 )
 
 type Config struct {
-	Brokers            []string `envconfig:"KAFKA_READER_BROKERS" required:"true"`
-	Group              string   `envconfig:"KAFKA_READER_GROUP" required:"true"`
-	Topic              string   `envconfig:"KAFKA_READER_TOPIC" required:"true"`
-	AutoCommitInterval int      `envconfig:"KAFKA_AUTO_COMMIT_INTERVAL" required:"true"` // в секундах
-	AutoCommitEnable   bool     `envconfig:"KAFKA_AUTO_COMMIT_ENABLE" required:"true"`
+	Brokers            []string
+	Group              string
+	Topic              string
+	AutoCommitEnable   bool
+	AutoCommitInterval int
 }
 
 type KafkaReader struct {

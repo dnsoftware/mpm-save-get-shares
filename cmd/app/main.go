@@ -17,9 +17,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("GetProjectRoot failed: %s", err.Error())
 	}
-	_ = basePath
+	configFile := basePath + "/config.yaml"
+	envFile := basePath + "/.env"
 
-	c, err := config.New()
+	c, err := config.New(configFile, envFile)
 	if err != nil {
 
 	}

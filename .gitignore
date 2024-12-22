@@ -2,3 +2,5 @@
 .env
 **/test.log
 app.log
+config.yaml
+shares

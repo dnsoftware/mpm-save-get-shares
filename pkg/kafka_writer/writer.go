@@ -15,8 +15,8 @@ import (
 )
 
 type Config struct {
-	Brokers []string `envconfig:"KAFKA_READER_BROKERS" required:"true"`
-	Topic   string   `envconfig:"KAFKA_READER_TOPIC" required:"true"`
+	Brokers []string
+	Topic   string
 }
 
 // KafkaWriter - структура для асинхронного продюсера

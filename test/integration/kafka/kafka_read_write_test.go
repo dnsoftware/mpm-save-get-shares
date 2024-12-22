@@ -42,6 +42,7 @@ func TestKafkaWriteRead(t *testing.T) {
 	require.NoError(t, err)
 	logger.InitLogger(logger.LogLevelDebug, filePath)
 
+	// Адреса экземпляров брокеров кафки с портами
 	brokers, err := kafkaContainer.Brokers(ctx)
 	require.NoError(t, err)
 
