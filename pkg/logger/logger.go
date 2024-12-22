@@ -81,3 +81,13 @@ func GetLoggerMainLogPath() (string, error) {
 
 	return filePath, nil
 }
+
+func GetLoggerTestLogPath() (string, error) {
+	dir, err := utils.GetProjectRoot(constants.ProjectRootAnchorFile)
+	if err != nil {
+		return "", err
+	}
+	filePath := dir + "/" + constants.TestLogFile
+
+	return filePath, nil
+}

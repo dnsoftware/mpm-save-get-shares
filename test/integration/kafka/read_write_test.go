@@ -3,39 +3,31 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/kafka"
 
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_writer"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
+	tctest "github.com/dnsoftware/mpm-save-get-shares/test/testcontainers"
 )
 
 // Тестирование отправки и получения сообщений в Кафку с использованием testcontainers
 func TestKafkaWriteRead(t *testing.T) {
 	topic := "test-by-testcontainers"
 	group := "test-group"
+	ctx := context.Background()
 
 	/********************** Настройка testcontainers ************************/
-	ctx := context.Background()
-	kafkaContainer, err := kafka.Run(ctx, "confluentinc/confluent-local:7.5.0", kafka.WithClusterID("kraftCluster"))
-	testcontainers.CleanupContainer(t, kafkaContainer)
-	require.NoError(t, err)
-
-	assertAdvertisedListeners(t, kafkaContainer)
-
-	if !strings.EqualFold(kafkaContainer.ClusterID, "kraftCluster") {
-		t.Fatalf("expected clusterID to be %s, got %s", "kraftCluster", kafkaContainer.ClusterID)
+	kafkaContainer, err := tctest.NewKafkaTestcontainer(t)
+	if err != nil {
+		t.Fatalf(err.Error())
 	}
-	/******************* КОНЕЦ Настройка testcontainers **********************/
 
 	// Создаем издателя и подписчика, тестируем прием/отправку сообщения
 	filePath, err := logger.GetLoggerMainLogPath()

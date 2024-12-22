@@ -43,5 +43,4 @@ func TestReader(t *testing.T) {
 
 	// задержка, чтобы сработал автокоммит
 	time.Sleep(10 * time.Second)
-	reader.Close()
 }
