@@ -38,7 +38,7 @@ func TestWriter(t *testing.T) {
 
 	tracer := otel.Tracer("share-trace")
 
-	ctx, spanAction := tracer.Start(ctx, "kafka-writer-init")
+	ctxAction, spanAction := tracer.Start(ctx, "share-trace-start")
 
 	filePath, err := logger.GetLoggerMainLogPath()
 	require.NoError(t, err)
@@ -56,28 +56,29 @@ func TestWriter(t *testing.T) {
 
 	spanAction.End()
 
-	ctx, spanAction = tracer.Start(ctx, "kafka-topic-delete")
+	_, spanTopicDelete := tracer.Start(ctxAction, "kafka-topic-delete")
 
 	err = writer.DeleteTopic(writer.topic)
 	//assert.NoError(t, err)
 
-	spanAction.End()
+	spanTopicDelete.End()
 
-	ctx, spanAction = tracer.Start(ctx, "kafka-producer-start")
+	_, spanProducerStart := tracer.Start(ctxAction, "kafka-producer-start")
 	// Запуск продюсера
 	writer.Start()
-	spanAction.End()
+	spanProducerStart.End()
 
 	// Отправка сообщений
-	ctx, spanAction = tracer.Start(ctx, "send-message")
+	ctxSend, spanSend := tracer.Start(ctxAction, "send-message")
 	msgSend := fmt.Sprintf("%v", time.Now().Nanosecond())
-	writer.SendMessage(ctx, "test_write", msgSend)
-	spanAction.End()
+	writer.SendMessage(ctxSend, "test_write", msgSend)
+	_ = spanSend
+	spanSend.End()
 
 	//////////////////////////////////////// читаем из топика
 	time.Sleep(2 * time.Second)
 
-	ctx, spanRead := tracer.Start(ctx, "topic-read")
+	_, spanRead := tracer.Start(ctxSend, "topic-read")
 	cfgReader := kafka_reader.Config{
 		Brokers:            []string{"localhost:9092", "localhost:9093", "localhost:9094"},
 		Group:              constants.KafkaSharesGroup,
@@ -132,10 +133,11 @@ func (h *testConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession
 
 		tracer := otel.Tracer("consume-share")
 		ctx, span := tracer.Start(ctx, "process")
-		defer span.End()
 
 		h.msgChan <- msg
 		sess.MarkMessage(msg, "")
+
+		span.End()
 		return nil
 	}
 	return nil
