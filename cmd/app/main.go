@@ -20,11 +20,11 @@ func main() {
 	configFile := basePath + "/config.yaml"
 	envFile := basePath + "/.env"
 
-	c, err := config.New(configFile, envFile)
+	cfg, err := config.New(configFile, envFile)
 	if err != nil {
 
 	}
 
-	err = app.Run(ctx, c)
+	err = app.Run(ctx, cfg)
 
 }

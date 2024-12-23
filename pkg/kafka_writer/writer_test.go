@@ -1,6 +1,7 @@
 package kafka_writer
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -8,15 +9,36 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
+	otelpkg "github.com/dnsoftware/mpm-save-get-shares/pkg/otel"
 )
 
 // Тестирование отправки шар в кафку
 // кафка должна быть запущена
+// + трассировка
+// используем запущенные на локалке kafka и otel collector
 func TestWriter(t *testing.T) {
+
+	ctx := context.Background()
+
+	otelConfig := otelpkg.Config{
+		ServiceName:        "TestService",
+		CollectorEndpoint:  "localhost:4317",
+		BatchTimeout:       1 * time.Second,
+		MaxExportBatchSize: 100,
+		MaxQueueSize:       500,
+	}
+	cleanup := otelpkg.InitTracer(otelConfig)
+	defer cleanup()
+
+	tracer := otel.Tracer("share-trace")
+
+	ctx, spanAction := tracer.Start(ctx, "kafka-writer-init")
 
 	filePath, err := logger.GetLoggerMainLogPath()
 	require.NoError(t, err)
@@ -32,19 +54,30 @@ func TestWriter(t *testing.T) {
 	assert.NoError(t, err)
 	defer writer.Close()
 
-	err = writer.DeleteTopic(writer.topic)
-	assert.NoError(t, err)
+	spanAction.End()
 
+	ctx, spanAction = tracer.Start(ctx, "kafka-topic-delete")
+
+	err = writer.DeleteTopic(writer.topic)
+	//assert.NoError(t, err)
+
+	spanAction.End()
+
+	ctx, spanAction = tracer.Start(ctx, "kafka-producer-start")
 	// Запуск продюсера
 	writer.Start()
+	spanAction.End()
 
 	// Отправка сообщений
+	ctx, spanAction = tracer.Start(ctx, "send-message")
 	msgSend := fmt.Sprintf("%v", time.Now().Nanosecond())
-	writer.SendMessage("test_write", msgSend)
-	writer.Close()
+	writer.SendMessage(ctx, "test_write", msgSend)
+	spanAction.End()
 
 	//////////////////////////////////////// читаем из топика
 	time.Sleep(2 * time.Second)
+
+	ctx, spanRead := tracer.Start(ctx, "topic-read")
 	cfgReader := kafka_reader.Config{
 		Brokers:            []string{"localhost:9092", "localhost:9093", "localhost:9094"},
 		Group:              constants.KafkaSharesGroup,
@@ -67,6 +100,7 @@ func TestWriter(t *testing.T) {
 	go func() {
 		reader.ConsumeMessages(handler)
 	}()
+	spanRead.End()
 
 	// Получаем сообщение
 	select {
@@ -87,6 +121,19 @@ func (h *testConsumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error   
 func (h *testConsumerGroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
 func (h *testConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
+		// Создаем carrier для извлечения заголовков
+		carrier := propagation.MapCarrier{}
+		// Извлекаем контекст трассировки из заголовков
+		// Преобразуем заголовки Kafka в формат map
+		for _, header := range msg.Headers {
+			carrier[string(header.Key)] = string(header.Value)
+		}
+		ctx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
+
+		tracer := otel.Tracer("consume-share")
+		ctx, span := tracer.Start(ctx, "process")
+		defer span.End()
+
 		h.msgChan <- msg
 		sess.MarkMessage(msg, "")
 		return nil

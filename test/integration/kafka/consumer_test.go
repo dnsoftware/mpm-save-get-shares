@@ -112,7 +112,7 @@ func TestConsumerProcessShare(t *testing.T) {
 		reader.ConsumeMessages(handler)
 	}()
 
-	// Получаем сообщение
+	// Получаем сообщение и делаем тестовые сравнения
 	var item dto.ShareFound
 	select {
 	case msg := <-msgChan:
@@ -124,7 +124,7 @@ func TestConsumerProcessShare(t *testing.T) {
 		t.Fatal("Таймаут при получении сообщения")
 	}
 
-	// Делаем тестовые сравнения
+	//
 
 	/* предварительно пишем функционал работы с кешем и тесты к нему */
 	// Запрашиваем данные майнера/воркера из кеша ristretto

@@ -9,9 +9,12 @@ import (
 type Dependencies struct {
 }
 
-func Run(ctx context.Context, c config.Config) (err error) {
+func Run(ctx context.Context, cfg config.Config) (err error) {
 	var deps Dependencies
 	_ = deps
+
+	/********* Инициализация трассировщика **********/
+	/********* КОНЕЦ Инициализация трассировщика **********/
 
 	return nil
 }

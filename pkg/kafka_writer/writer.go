@@ -1,6 +1,7 @@
 package kafka_writer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"go.opentelemetry.io/otel"
 
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 )
@@ -89,12 +91,19 @@ func (k *KafkaWriter) Start() {
 }
 
 // SendMessage - метод для отправки сообщения в Kafka
-func (k *KafkaWriter) SendMessage(key string, value string) {
+func (k *KafkaWriter) SendMessage(ctx context.Context, key string, value string) {
+
 	message := &sarama.ProducerMessage{
 		Topic: k.topic,
 		Key:   sarama.StringEncoder(key), // Ключ сообщения
 		Value: sarama.StringEncoder(value),
 	}
+
+	// Заголовки Kafka и инъекция контекста трассировки в них
+	headers := SaramaHeadersCarrier(make([]sarama.RecordHeader, 0))
+	propagator := otel.GetTextMapPropagator()
+	propagator.Inject(ctx, &headers) // Передаём указатель на адаптер
+	message.Headers = headers
 
 	// Отправка сообщения
 	k.producer.Input() <- message
