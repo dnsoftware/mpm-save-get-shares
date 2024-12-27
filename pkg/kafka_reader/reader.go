@@ -73,16 +73,19 @@ func (r *KafkaReader) ConsumeMessages(handler sarama.ConsumerGroupHandler) {
 
 		// Бесконечный цикл чтения сообщений
 		for {
-			if err := r.consumerGroup.Consume(r.ctx, []string{r.topic}, handler); err != nil {
-				r.logger.Error(fmt.Sprintf("Ошибка при чтении сообщений, Group: %s, Topic: %s: %v", r.group, r.topic, err))
-			}
-
 			// Если контекст завершён, выходим из цикла
 			if r.ctx.Err() != nil {
 				return
 			}
+
+			if err := r.consumerGroup.Consume(r.ctx, []string{r.topic}, handler); err != nil {
+				r.logger.Error(fmt.Sprintf("Ошибка при чтении сообщений, Group: %s, Topic: %s: %v", r.group, r.topic, err))
+			}
+
 		}
 	}()
+
+	return
 }
 
 func (r *KafkaReader) Close() {

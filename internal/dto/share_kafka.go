@@ -4,7 +4,7 @@ package dto
 type ShareFound struct {
 	Uuid         string `json:"uuid"`         // уникальный идентификатор
 	BlockType    string `json:"blockType"`    //
-	ServerId     string `json:"serverId"`     // идентификатор пул-сервера (типа ALEPH-1 и т.п.)
+	ServerID     string `json:"serverId"`     // идентификатор пул-сервера (типа ALEPH-1 и т.п.)
 	CoinSymbol   string `json:"coinSymbol"`   // идентификатор монеты
 	Workerfull   string `json:"workerfull"`   // полный идентификатор воркера
 	ShareDate    int64  `json:"shareDate"`    // время когда найдено, в миллисекундах

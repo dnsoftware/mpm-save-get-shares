@@ -12,3 +12,5 @@ const (
 	KafkaSharesTopic              = "shares"
 	KafkaSharesAutocommitInterval = 5
 )
+
+const WorkerSeparator = "." // символ разделитель имени воркера от имени кошелька

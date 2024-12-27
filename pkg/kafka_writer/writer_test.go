@@ -69,16 +69,13 @@ func TestWriter(t *testing.T) {
 	spanProducerStart.End()
 
 	// Отправка сообщений
-	ctxSend, spanSend := tracer.Start(ctxAction, "send-message")
+	_, spanSend := tracer.Start(ctxAction, "send-message")
 	msgSend := fmt.Sprintf("%v", time.Now().Nanosecond())
-	writer.SendMessage(ctxSend, "test_write", msgSend)
-	_ = spanSend
+	writer.SendMessage(ctxAction, "test_write", msgSend)
 	spanSend.End()
 
 	//////////////////////////////////////// читаем из топика
-	time.Sleep(2 * time.Second)
-
-	_, spanRead := tracer.Start(ctxSend, "topic-read")
+	_, spanRead := tracer.Start(ctxAction, "topic-read")
 	cfgReader := kafka_reader.Config{
 		Brokers:            []string{"localhost:9092", "localhost:9093", "localhost:9094"},
 		Group:              constants.KafkaSharesGroup,
@@ -103,7 +100,7 @@ func TestWriter(t *testing.T) {
 	}()
 	spanRead.End()
 
-	// Получаем сообщение
+	// Получаем сообщения
 	select {
 	case msg := <-msgChan:
 		assert.Equal(t, msgSend, string(msg.Value))
@@ -133,7 +130,6 @@ func (h *testConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession
 
 		tracer := otel.Tracer("consume-share")
 		ctx, span := tracer.Start(ctx, "process")
-
 		h.msgChan <- msg
 		sess.MarkMessage(msg, "")
 

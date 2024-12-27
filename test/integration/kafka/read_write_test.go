@@ -54,7 +54,7 @@ func TestKafkaWriteRead(t *testing.T) {
 	var msgSend []string
 	msgSend = append(msgSend, fmt.Sprintf("%v", time.Now().Nanosecond()), fmt.Sprintf("%v", time.Now().Nanosecond()))
 	for _, val := range msgSend {
-		writer.SendMessage("test_write", val)
+		writer.SendMessage(ctx, "test_write", val)
 	}
 
 	//////////////////////////////////////// читаем из топика
@@ -105,7 +105,7 @@ func (h *testConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession
 	for msg := range claim.Messages() {
 		h.msgChan <- msg
 		sess.MarkMessage(msg, "")
-		return nil
+		return nil // в тестовых целях, для чтения одного сообщения
 	}
 	return nil
 }

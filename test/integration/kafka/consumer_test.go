@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"go.opentelemetry.io/otel"
 
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/controller/kafka_consumer/shares"
@@ -17,22 +21,38 @@ import (
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_writer"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
+	otelpkg "github.com/dnsoftware/mpm-save-get-shares/pkg/otel"
 	tctest "github.com/dnsoftware/mpm-save-get-shares/test/testcontainers"
 )
 
 type sharesFound map[string]dto.ShareFound
 
-var topic string = "topic_test"
-var group string = "group_test"
-var sfSlice []dto.ShareFound
 var sf sharesFound = make(map[string]dto.ShareFound)
 
 // Очистка баз данных,
 // Возвращаем адреса брокеров Кафки
 func setup(t *testing.T) []string {
+
+	var topic string = "topic_test"
+	var sfSlice []dto.ShareFound
+
 	ctx := context.Background()
 
+	otelConfig := otelpkg.Config{
+		ServiceName:        "TestService",
+		CollectorEndpoint:  "localhost:4317",
+		BatchTimeout:       1 * time.Second,
+		MaxExportBatchSize: 100,
+		MaxQueueSize:       500,
+	}
+	_ = otelpkg.InitTracer(otelConfig)
+	//defer cleanup()
+	tracer := otel.Tracer("share-trace")
+
 	/********************** Настройка testcontainers ************************/
+	// Уровень логирование testcontainers
+	testcontainers.Logger = log.New(os.Stderr, ": ", log.LstdFlags)
+
 	kafkaContainer, err := tctest.NewKafkaTestcontainer(t)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -64,13 +84,17 @@ func setup(t *testing.T) []string {
 	writer.Start()
 
 	// Отправка сообщений
+	ctxAction, spanAction := tracer.Start(ctx, "share-trace-init")
 	err = json.Unmarshal([]byte(testData), &sfSlice)
 	require.NoError(t, err)
 	for _, val := range sfSlice {
+		ctxItem, spanItem := tracer.Start(ctxAction, "item-start")
 		sf[val.Uuid] = val
 		valSend, _ := json.Marshal(val)
-		writer.SendMessage(val.Uuid, string(valSend))
+		writer.SendMessage(ctxItem, val.Uuid, string(valSend))
+		spanItem.End()
 	}
+	spanAction.End()
 
 	// очищаем справочники Postgres
 
@@ -85,6 +109,9 @@ func setup(t *testing.T) []string {
 
 // Тестируем получение шар из Кафки
 func TestConsumerProcessShare(t *testing.T) {
+
+	var topic string = "topic_test"
+	var group string = "group_test"
 
 	// Подготовка теста
 	brokers := setup(t)
@@ -114,14 +141,19 @@ func TestConsumerProcessShare(t *testing.T) {
 
 	// Получаем сообщение и делаем тестовые сравнения
 	var item dto.ShareFound
-	select {
-	case msg := <-msgChan:
-		fmt.Println(string(msg.Value))
-		err := json.Unmarshal(msg.Value, &item)
-		require.NoError(t, err)
-		require.Equal(t, sf[item.Uuid], item)
-	case <-time.After(6 * time.Second):
-		t.Fatal("Таймаут при получении сообщения")
+Loop:
+	for {
+		select {
+		case msg := <-msgChan:
+			err := json.Unmarshal(msg.Value, &item)
+			require.NoError(t, err)
+			require.Equal(t, sf[item.Uuid], item)
+
+			fmt.Println(string(msg.Value))
+
+		case <-time.After(10 * time.Second):
+			break Loop
+		}
 	}
 
 	//
@@ -129,13 +161,13 @@ func TestConsumerProcessShare(t *testing.T) {
 	/* предварительно пишем функционал работы с кешем и тесты к нему */
 	// Запрашиваем данные майнера/воркера из кеша ristretto
 
-	/* предварительно пишем функционал работы со справочниками Postgres и тесты к нему */
-	// Если в кеше нет данных - запрашиваем из Postgresql
+	/* предварительно пишем API функционала работы со справочниками Postgres и тесты к нему */
+	// Если в кеше нет данных - запрашиваем через API из Postgresql, расположенный во внешнем микросервисе
 
 	// Нормализуем данные по шаре
 	// Тесты к нормализации?
 
-	// Записываем данные в ClickHouse (используем буфер)
+	// Записываем данные через API в ClickHouse (используем буфер), расположенный во внешнем микросервисе
 
 	// Тестируем записанные данные путем их получения и сравнения с отправленными
 

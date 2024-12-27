@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -51,9 +52,12 @@ func InitTracer(cfg Config) func() {
 		trace.WithMaxQueueSize(cfg.MaxQueueSize),             // Максимум MaxQueueSize спанов в очереди
 	)
 
+	// Оборачиваем BatchSpanProcessor фильтрующим процессором
+	filteringProcessor := &filteringSpanProcessor{next: batchProcessor}
+
 	// Настраиваем TracerProvider
 	tp := trace.NewTracerProvider(
-		trace.WithSpanProcessor(batchProcessor),
+		trace.WithSpanProcessor(filteringProcessor),
 		trace.WithResource(resource.NewSchemaless(
 			semconv.ServiceNameKey.String(cfg.ServiceName),
 		)),
@@ -93,4 +97,32 @@ func InitSimpleTracer() func() {
 			log.Fatalf("failed to shutdown TracerProvider: %v", err)
 		}
 	}
+}
+
+// Для фильтрации спанов
+type filteringSpanProcessor struct {
+	next trace.SpanProcessor
+}
+
+func (fsp *filteringSpanProcessor) OnStart(parent context.Context, span trace.ReadWriteSpan) {
+	fsp.next.OnStart(parent, span)
+}
+
+// OnEnd Здесь настраиваем фильтры по названию спана
+// Пропускаем спаны, связанные с Docker API
+func (fsp *filteringSpanProcessor) OnEnd(span trace.ReadOnlySpan) {
+	if strings.Contains(span.Name(), "/containers") ||
+		strings.Contains(span.Name(), "GET /") ||
+		strings.Contains(span.Name(), "HEAD /") {
+		return
+	}
+	fsp.next.OnEnd(span)
+}
+
+func (fsp *filteringSpanProcessor) Shutdown(ctx context.Context) error {
+	return fsp.next.Shutdown(ctx)
+}
+
+func (fsp *filteringSpanProcessor) ForceFlush(ctx context.Context) error {
+	return fsp.next.ForceFlush(ctx)
 }
