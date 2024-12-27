@@ -7,11 +7,21 @@ import (
 	"github.com/IBM/sarama"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+
+	"github.com/dnsoftware/mpm-save-get-shares/internal/usecase/share"
 )
 
 // ShareConsumer реализует интерфейс sarama.ConsumerGroupHandler
 type ShareConsumer struct {
 	MsgChan chan *sarama.ConsumerMessage
+	share.ShareUseCase
+}
+
+func NewShareConsumer(msgChan chan *sarama.ConsumerMessage, shareUseCase share.ShareUseCase) (*ShareConsumer, error) {
+	return &ShareConsumer{
+		MsgChan:      msgChan,
+		ShareUseCase: shareUseCase,
+	}, nil
 }
 
 // Setup вызывается перед началом обработки
@@ -42,7 +52,12 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 		ctx, span := tracer.Start(ctx, "process")
 
 		consumer.MsgChan <- msg
+		// Тут идет вызов usecase
+
+		// Если сообщение успешно обработано - помечаем, как обработанное TODO
 		session.MarkMessage(msg, "")
+		// иначе - логируем ошибку и делаем пометку "алерт" TODO
+		// ...
 
 		span.End()
 	}

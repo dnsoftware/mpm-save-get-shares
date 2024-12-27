@@ -1,16 +1,32 @@
 package share
 
 import (
+	"context"
+	"time"
+
+	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
 )
 
 // SaveShare сохранение шары в базе данных (ClickHouse)
 // Возвращает nil, если запись быда добавлена успешно
-func (u *UseCase) SaveShare(shareFound dto.ShareFound) error {
+func (u *ShareUseCase) SaveShare(shareFound dto.ShareFound) error {
 	// Worker
 	// Проверяем в кэше по имени воркера, если есть - запоминаем ID воркера
+	workerID, err := u.minerCache.GetWorkerIDByName(shareFound.Workerfull)
+	if err != nil {
+		return err
+	}
 
 	// Если в кэше нет запрашиваем в удаленной базе, если есть - запоминаем ID воркера
+	if workerID == 0 {
+		ctx, cancel1 := context.WithTimeout(context.Background(), constants.QueryDealine*time.Second)
+		defer cancel1()
+		workerID, err = u.minerStorage.GetWorkerIDByName(ctx, shareFound.Workerfull)
+		if err != nil {
+			return err
+		}
+	}
 
 	// если в базе нет добавляем в базу, получаем ID воркера, кэшируем
 

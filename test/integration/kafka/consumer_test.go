@@ -10,13 +10,15 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"go.opentelemetry.io/otel"
 
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/kafka_consumer/shares"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/postgres"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
-	"github.com/dnsoftware/mpm-save-get-shares/internal/controller/kafka_consumer/shares"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_writer"
@@ -53,6 +55,7 @@ func setup(t *testing.T) []string {
 	// Уровень логирование testcontainers
 	testcontainers.Logger = log.New(os.Stderr, ": ", log.LstdFlags)
 
+	// KAFKA
 	kafkaContainer, err := tctest.NewKafkaTestcontainer(t)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -96,7 +99,23 @@ func setup(t *testing.T) []string {
 	}
 	spanAction.End()
 
-	// очищаем справочники Postgres
+	// POSTGRES
+	ctxPG := context.Background()
+	postgresContainer, err := tctest.NewPostgresTestcontainer(t)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	dsn, err := postgresContainer.ConnectionString(ctxPG)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	pgs, err := postgres.NewPostgresMinerStorage(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = pgs
 
 	// очищаем базу ClickHouse
 
@@ -131,6 +150,8 @@ func TestConsumerProcessShare(t *testing.T) {
 
 	// Читаем сообщение
 	msgChan := make(chan *sarama.ConsumerMessage)
+
+	//	shareUseCase := share.NewShareUseCase()
 	handler := &shares.ShareConsumer{
 		MsgChan: msgChan,
 	}
