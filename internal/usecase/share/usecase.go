@@ -15,8 +15,8 @@ type ShareStorage interface {
 type MinerStorage interface {
 	CreateWallet(ctx context.Context, wallet entity.Wallet) (int64, error)
 	CreateWorker(ctx context.Context, worker entity.Worker) (int64, error)
-	GetWalletIDByName(ctx context.Context, wallet string) (int64, error) // 0 - если не найден
-	GetWorkerIDByName(ctx context.Context, worker string) (int64, error) // 0 - если не найден
+	GetWalletIDByName(ctx context.Context, wallet string, coinID int64, rewardMethod string) (int64, error) // 0 - если не найден
+	GetWorkerIDByName(ctx context.Context, worker string, coinID int64, rewardMethod string) (int64, error) // 0 - если не найден
 }
 
 // CoinStorage работа с данными о монете из хранилища  (Postgresql или кэш (ristretto))
@@ -27,10 +27,10 @@ type CoinStorage interface {
 
 // MinerCache работа с кэшированными данными майнеров
 type MinerCache interface {
-	CreateWallet(wallet string) (int64, error)
-	CreateWorker(worker string) (int64, error)
-	GetWalletIDByName(wallet string) (int64, error) // 0 - если не найден
-	GetWorkerIDByName(worker string) (int64, error) // 0 - если не найден
+	CreateWallet(wallet entity.Wallet) (int64, error)
+	CreateWorker(worker entity.Worker) (int64, error)
+	GetWalletIDByName(wallet string, coinID int64, rewardMethod string) (int64, error) // 0 - если не найден
+	GetWorkerIDByName(worker string, coinID int64, rewardMethod string) (int64, error) // 0 - если не найден
 }
 
 // CoinCache работа с кэшированными данными о монете

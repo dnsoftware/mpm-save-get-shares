@@ -1,5 +1,11 @@
 package dto
 
+import (
+	"time"
+
+	"github.com/dnsoftware/mpm-save-get-shares/internal/entity"
+)
+
 // ShareFound Структура данных шары получаемой из Кафки
 type ShareFound struct {
 	Uuid         string `json:"uuid"`         // уникальный идентификатор
@@ -17,4 +23,29 @@ type ShareFound struct {
 	IsSolo       bool   `json:"isSolo"`       // соло режим
 	RewardMethod string `json:"rewardMethod"` // метод начисления вознаграждения
 	Cost         string `json:"cost"`         // награда за шару
+}
+
+// ToShare Частичный маппинг в entity.Share
+// CoinID, WorkerID, WalletID - заполняются потом
+func (s *ShareFound) ToShare() entity.Share {
+
+	// Создаем объект времени из миллисекунд
+	t := time.UnixMilli(s.ShareDate)
+
+	share := entity.Share{
+		UUID:         s.Uuid,
+		ServerID:     s.ServerID,
+		CoinID:       0, // заполняется в usecase
+		WorkerID:     0, // заполняется в usecase
+		WalletID:     0, // заполняется в usecase
+		ShareDate:    t.Format("2006-01-02 15:04:05.999"),
+		Difficulty:   s.Difficulty,
+		Sharedif:     s.Sharedif,
+		Nonce:        s.Nonce,
+		IsSolo:       s.IsSolo,
+		RewardMethod: s.RewardMethod,
+		Cost:         s.Cost,
+	}
+
+	return share
 }

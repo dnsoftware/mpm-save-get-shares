@@ -1,6 +1,7 @@
 package entity
 
 type Worker struct {
+	ID           int64
 	CoinID       int64
 	Workerfull   string // полное имя воркера
 	Wallet       string // имя кошелька (майнера)

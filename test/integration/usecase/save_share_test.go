@@ -1,45 +1,31 @@
-package kafka
+package usecase
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/IBM/sarama"
+	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v4/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"go.opentelemetry.io/otel"
 
-	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/kafka_consumer/shares"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/postgres"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
-	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
-	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
-	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_writer"
-	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 	otelpkg "github.com/dnsoftware/mpm-save-get-shares/pkg/otel"
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/utils"
 	tctest "github.com/dnsoftware/mpm-save-get-shares/test/testcontainers"
 )
 
-type sharesFound map[string]dto.ShareFound
-
-var sf sharesFound = make(map[string]dto.ShareFound)
-
-// Очистка баз данных,
-// Возвращаем адреса брокеров Кафки
-func setup(t *testing.T) []string {
-
-	var topic string = "topic_test"
-	var sfSlice []dto.ShareFound
-
+func setup(t *testing.T) *pgxpool.Pool {
 	ctx := context.Background()
+	_ = ctx
 
 	otelConfig := otelpkg.Config{
 		ServiceName:        "TestService",
@@ -51,110 +37,86 @@ func setup(t *testing.T) []string {
 	_ = otelpkg.InitTracer(otelConfig)
 	//defer cleanup()
 	tracer := otel.Tracer("share-trace")
+	_ = tracer
 
 	/********************** Настройка testcontainers ************************/
 	// Уровень логирование testcontainers
 	testcontainers.Logger = log.New(os.Stderr, ": ", log.LstdFlags)
 
-	//**** KAFKA ****//
-	kafkaContainer, err := tctest.NewKafkaTestcontainer(t)
+	//**** POSTGRES ****//
+	ctxPG := context.Background()
+	postgresContainer, err := tctest.NewPostgresTestcontainer(t)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	// Создаем издателя и подписчика, тестируем прием/отправку сообщения
-	filePath, err := logger.GetLoggerTestLogPath()
-	require.NoError(t, err)
-	logger.InitLogger(logger.LogLevelDebug, filePath)
-
-	// Адреса экземпляров брокеров кафки с портами
-	brokers, err := kafkaContainer.Brokers(ctx)
-	require.NoError(t, err)
-
-	cfg := kafka_writer.Config{
-		Brokers: brokers,
-		Topic:   topic,
+	dsn, err := postgresContainer.ConnectionString(ctxPG, "sslmode=disable")
+	if err != nil {
+		t.Fatalf(err.Error())
 	}
 
-	writer, err := kafka_writer.NewKafkaWriter(cfg, logger.Log())
-	assert.NoError(t, err)
-
-	// Очищаем топик кафки
-	err = writer.DeleteTopic(topic)
-	//	assert.NoError(t, err)
-
-	// Создаем тестовый набор шар и записываем его в Кафку
-	// запуск продюсера
-	writer.Start()
-
-	// Заполняем топик
-	ctxAction, spanAction := tracer.Start(ctx, "share-trace-init")
-	err = json.Unmarshal([]byte(testData), &sfSlice)
-	require.NoError(t, err)
-	for _, val := range sfSlice {
-		ctxItem, spanItem := tracer.Start(ctxAction, "item-start")
-		sf[val.Uuid] = val
-		valSend, _ := json.Marshal(val)
-		writer.SendMessage(ctxItem, val.Uuid, string(valSend))
-		spanItem.End()
+	pool, err := pgxpool.Connect(context.Background(), dsn)
+	if err != nil {
+		panic("Unable to connect to database: " + err.Error())
 	}
-	spanAction.End()
 
-	time.Sleep(2 * time.Second)
+	// применяем миграции Postgres
+	basePath, err := utils.GetProjectRoot(constants.ProjectRootAnchorFile)
+	// Укажите путь к миграциям и строку подключения к базе данных
+	m, err := migrate.New(
+		"file://"+basePath+"/"+constants.MigrationDir,
+		dsn,
+	)
+	require.NoError(t, err)
 
-	return brokers
+	// Применить миграции
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalf("Ошибка при применении миграций: %v", err)
+	}
+
+	return pool
 }
 
-// Тестируем получение шар из Кафки
-func TestConsumerGetShares(t *testing.T) {
+// Тестируем работу с локальной базой Postgresql в testcontainers
+func TestSaveShareLocal(t *testing.T) {
+	pool := setup(t)
 
-	var topic string = "topic_test"
-	var group string = "group_test"
-
-	// Подготовка теста
-	brokers := setup(t)
-
-	// Получаем тестовый набор шар из Кафки
-	cfgReader := kafka_reader.Config{
-		Brokers:            brokers,
-		Group:              group,
-		Topic:              topic,
-		AutoCommitInterval: constants.KafkaSharesAutocommitInterval,
-		AutoCommitEnable:   true,
+	// Postgresql
+	pgStorage, err := postgres.NewPostgresMinerStorage(pool)
+	if err != nil {
+		t.Fatal(err)
 	}
+	_ = pgStorage
 
-	reader, err := kafka_reader.NewKafkaReader(cfgReader, logger.Log())
-	assert.NoError(t, err)
-	defer reader.Close()
+	// Запрашиваем данные майнера/воркера из кеша ristretto
 
-	// Читаем сообщение
-	msgChan := make(chan *sarama.ConsumerMessage)
+	/* предварительно пишем API функционала работы со справочниками Postgres и тесты к нему */
+	// Если в кеше нет данных - запрашиваем через API из Postgresql, расположенный во внешнем микросервисе
 
-	//	shareUseCase := share.NewShareUseCase()
-	handler := &shares.ShareConsumer{
-		MsgChan: msgChan,
-	}
+	// Нормализуем данные по шаре
+	// Тесты к нормализации?
 
-	go func() {
-		reader.ConsumeMessages(handler)
-	}()
+	// Записываем данные через API в ClickHouse (используем буфер), расположенный во внешнем микросервисе
 
-	// Получаем сообщение и делаем тестовые сравнения
-	var item dto.ShareFound
-Loop:
-	for {
-		select {
-		case msg := <-msgChan:
-			err := json.Unmarshal(msg.Value, &item)
-			require.NoError(t, err)
-			require.Equal(t, sf[item.Uuid], item)
+	// Тестируем записанные данные путем их получения и сравнения с отправленными
 
-			fmt.Println(string(msg.Value))
+}
 
-		case <-time.After(10 * time.Second):
-			break Loop
-		}
-	}
+// Тестируем работу с удаленным микросервисом через API
+// Удаленный микросервис должен быть запущен или же запускать его из теста (в контейнере), а после теста тушить
+func TestSaveShareRemote(t *testing.T) {
+
+	// Запрашиваем данные майнера/воркера из кеша ristretto
+
+	/* предварительно пишем API функционала работы со справочниками Postgres и тесты к нему */
+	// Если в кеше нет данных - запрашиваем через API из Postgresql, расположенный во внешнем микросервисе
+
+	// Нормализуем данные по шаре
+	// Тесты к нормализации?
+
+	// Записываем данные через API в ClickHouse (используем буфер), расположенный во внешнем микросервисе
+
+	// Тестируем записанные данные путем их получения и сравнения с отправленными
 
 }
 
