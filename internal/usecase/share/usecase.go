@@ -20,6 +20,7 @@ type MinerStorage interface {
 }
 
 // CoinStorage работа с данными о монете из хранилища  (Postgresql или кэш (ristretto))
+// Метода сохранения в базу нет, потому что подразумевается что база уже заполнена
 type CoinStorage interface {
 	// GetCoinIDByName получение кода монеты в базе по буквенному коду (ALPH, KAS и т.д.), если не найдено - возвращаем ошибку
 	GetCoinIDByName(ctx context.Context, coin string) (int64, error)
@@ -35,7 +36,8 @@ type MinerCache interface {
 
 // CoinCache работа с кэшированными данными о монете
 type CoinCache interface {
-	GetCoinIDByName(coin string) (int64, error) // получение кода монеты из кэша по буквенному коду (ALPH, KAS и т.д.)
+	CreateCoin(key string, value int64) (int64, error) // занесение кода монеты в кэш
+	GetCoinIDByName(coin string) (int64, error)        // получение кода монеты из кэша по буквенному коду (ALPH, KAS и т.д.)
 }
 
 type ShareUseCase struct {

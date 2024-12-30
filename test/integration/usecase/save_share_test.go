@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -16,8 +18,13 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"go.opentelemetry.io/otel"
 
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/clickhouse"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/postgres"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/ristretto"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/usecase/share"
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 	otelpkg "github.com/dnsoftware/mpm-save-get-shares/pkg/otel"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/utils"
 	tctest "github.com/dnsoftware/mpm-save-get-shares/test/testcontainers"
@@ -26,6 +33,10 @@ import (
 func setup(t *testing.T) *pgxpool.Pool {
 	ctx := context.Background()
 	_ = ctx
+
+	filePath, err := logger.GetLoggerTestLogPath()
+	require.NoError(t, err)
+	logger.InitLogger(logger.LogLevelDebug, filePath)
 
 	otelConfig := otelpkg.Config{
 		ServiceName:        "TestService",
@@ -81,14 +92,42 @@ func setup(t *testing.T) *pgxpool.Pool {
 func TestSaveShareLocal(t *testing.T) {
 	pool := setup(t)
 
-	// Postgresql
-	pgStorage, err := postgres.NewPostgresMinerStorage(pool)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = pgStorage
+	// Ristretto кэш
+	cacheCoin, err := ristretto.NewRistrettoCoinStorage()
+	require.NoError(t, err)
 
-	// Запрашиваем данные майнера/воркера из кеша ristretto
+	cacheMiner, err := ristretto.NewRistrettoMinerStorage()
+	require.NoError(t, err)
+
+	// Postgresql
+	coinStorage, err := postgres.NewPostgresCoinStorage(pool)
+	require.NoError(t, err)
+
+	minerStorage, err := postgres.NewPostgresMinerStorage(pool)
+	require.NoError(t, err)
+
+	// ClickHouse
+	shareStorage, err := clickhouse.NewClickHouseShareStorage()
+	require.NoError(t, err)
+
+	usecase := share.NewShareUseCase(shareStorage, minerStorage, coinStorage, cacheMiner, cacheCoin)
+
+	// Загружаем тестовые данные
+	var sfSlice []dto.ShareFound
+	err = json.Unmarshal([]byte(testData), &sfSlice)
+	require.NoError(t, err)
+
+	for _, item := range sfSlice {
+
+		normShare, err := usecase.NormalizeShare(item)
+		if err != nil {
+			logger.Log().Error(fmt.Sprintf("Normilize share error: %s", err.Error()))
+		}
+		require.NoError(t, err)
+
+		require.Equal(t, int64(4), normShare.CoinID)
+
+	}
 
 	/* предварительно пишем API функционала работы со справочниками Postgres и тесты к нему */
 	// Если в кеше нет данных - запрашиваем через API из Postgresql, расположенный во внешнем микросервисе

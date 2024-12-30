@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 
 	"github.com/dnsoftware/mpm-save-get-shares/internal/entity"
@@ -49,6 +50,16 @@ func (p *PostgresMinerStorage) GetWalletIDByName(ctx context.Context, wallet str
 	err := p.pool.QueryRow(ctx, `SELECT id FROM wallets WHERE name = $1 AND coin_id = $2 AND reward_method = $3`,
 		wallet, coinID, rewardMethod).Scan(&id)
 
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// Если нет записей
+			return 0, nil
+		} else {
+			// Обработка других ошибок
+			return 0, err
+		}
+	}
+
 	return id, err
 }
 
@@ -57,6 +68,16 @@ func (p *PostgresMinerStorage) GetWorkerIDByName(ctx context.Context, workerFull
 	var id int64
 	err := p.pool.QueryRow(ctx, `SELECT id FROM workers WHERE workerfull = $1 AND coin_id = $2 AND reward_method = $3`,
 		workerFull, coinID, rewardMethod).Scan(&id)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// Если нет записей
+			return 0, nil
+		} else {
+			// Обработка других ошибок
+			return 0, err
+		}
+	}
 
 	return id, err
 }
