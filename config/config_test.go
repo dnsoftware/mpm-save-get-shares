@@ -17,11 +17,12 @@ func TestConfigNew(t *testing.T) {
 		log.Fatalf("GetProjectRoot failed: %s", err.Error())
 	}
 	configFile := basePath + "/config_example.yaml"
-	envFile := basePath + "/.env"
+	envFile := basePath + "/.env_example"
 
 	cfg, err := New(configFile, envFile)
 	require.NoError(t, err)
 
 	assert.Equal(t, constants.KafkaSharesTopic, cfg.KafkaShareReader.Topic)
+	assert.Equal(t, "127.0.0.1:7878", cfg.GRPC.CoinTarget)
 
 }

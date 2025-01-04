@@ -14,3 +14,7 @@ kafka_metric_writer:
   brokers:
     - "127.0.0.1:9092"
   topic: "shares"
+
+grpc:
+  coin_target: "127.0.0.1:17878"
+  miner_target: "127.0.0.1:17878"

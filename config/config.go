@@ -30,10 +30,16 @@ type KafkaMetricWriterConfig struct {
 	Topic   string   `yaml:"topic" envconfig:"KAFKA_METRIC_WRITER_TOPIC" required:"true"`
 }
 
+type GRPCConfig struct {
+	CoinTarget  string `yaml:"coin_target" envconfig:"GRPC_COIN_TARGET" required:"true"`   // хост:порт удаленного хранилища Coin
+	MinerTarget string `yaml:"miner_target" envconfig:"GRPC_MINER_TARGET" required:"true"` // хост:порт удаленного хранилища майнер/воркер
+}
+
 type Config struct {
 	App               App                     `yaml:"application"`
 	KafkaShareReader  KafkaShareReaderConfig  `yaml:"kafka_share_reader"`
 	KafkaMetricWriter KafkaMetricWriterConfig `yaml:"kafka_metric_writer"`
+	GRPC              GRPCConfig              `yaml:"grpc"`
 }
 
 func New(filePath string, envFile string) (Config, error) {
