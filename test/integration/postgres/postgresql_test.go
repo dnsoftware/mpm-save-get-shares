@@ -91,6 +91,11 @@ func TestPostgresql(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, id, workerID)
 
+		// Повторная попытка вставки того же значения
+		id2, err := minerStorage.CreateWorker(ctx, worker)
+		require.NoError(t, err)
+		require.Equal(t, id, id2)
+
 	})
 
 	// Вставка/чтение таблица wallets
@@ -117,6 +122,11 @@ func TestPostgresql(t *testing.T) {
 		workerID, err := minerStorage.GetWalletIDByName(ctx, "wallet", 4, "PPLNS")
 		require.NoError(t, err)
 		require.Equal(t, id, workerID)
+
+		// Повторная попытка вставки того же значения
+		id2, err := minerStorage.CreateWallet(ctx, wallet)
+		require.NoError(t, err)
+		require.Equal(t, id, id2)
 
 	})
 

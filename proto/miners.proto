@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package grpc;
 
-option go_package = "internal/adapter/grpc";
+option go_package = "internal/adapter/grpc/proto";
 
 //import "google/rpc/status.proto"; // Импортируем стандартный тип ошибки
 
@@ -17,7 +17,7 @@ service MinersService {
 
 
 message GetCoinIDByNameRequest {
-    string coin = 1;
+  string coin = 1;
 }
 
 message GetCoinIDByNameResponse {

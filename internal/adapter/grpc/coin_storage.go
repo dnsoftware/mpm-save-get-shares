@@ -2,19 +2,20 @@ package grpc
 
 import (
 	"context"
-	"log"
 
 	"google.golang.org/grpc"
+
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/grpc/proto"
 )
 
 type GRPCCoinStorage struct {
 	conn   *grpc.ClientConn
-	client MinersServiceClient
+	client proto.MinersServiceClient
 }
 
 func NewCoinStorage(conn *grpc.ClientConn) (*GRPCCoinStorage, error) {
 
-	client := NewMinersServiceClient(conn)
+	client := proto.NewMinersServiceClient(conn)
 
 	return &GRPCCoinStorage{
 		client: client,
@@ -24,10 +25,7 @@ func NewCoinStorage(conn *grpc.ClientConn) (*GRPCCoinStorage, error) {
 
 func (g *GRPCCoinStorage) GetCoinIDByName(ctx context.Context, coin string) (int64, error) {
 
-	state := g.conn.GetState()
-	log.Printf("Connection state: %v", state.String())
-
-	resp, err := g.client.GetCoinIDByName(ctx, &GetCoinIDByNameRequest{
+	resp, err := g.client.GetCoinIDByName(ctx, &proto.GetCoinIDByNameRequest{
 		Coin: coin,
 	})
 

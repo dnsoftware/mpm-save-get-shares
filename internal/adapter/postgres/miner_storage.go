@@ -26,7 +26,16 @@ func NewPostgresMinerStorage(pool *pgxpool.Pool) (*PostgresMinerStorage, error) 
 
 func (p *PostgresMinerStorage) CreateWallet(ctx context.Context, wallet entity.Wallet) (int64, error) {
 	var newID int64
-	err := p.pool.QueryRow(ctx, `INSERT INTO wallets (coin_id, name, is_solo, reward_method) 
+
+	id, err := p.GetWalletIDByName(ctx, wallet.Name, wallet.CoinID, wallet.RewardMethod)
+	if err != nil {
+		return 0, err
+	}
+	if id > 0 {
+		return id, nil
+	}
+
+	err = p.pool.QueryRow(ctx, `INSERT INTO wallets (coin_id, name, is_solo, reward_method) 
 			VALUES ($1, $2, $3, $4) RETURNING id`,
 		wallet.CoinID, wallet.Name, wallet.IsSolo, wallet.RewardMethod).Scan(&newID)
 
@@ -38,7 +47,16 @@ func (p *PostgresMinerStorage) CreateWorker(ctx context.Context, worker entity.W
 	updated_at := time.Now().Format("2006-01-02 15:04:05.000")
 
 	var newID int64
-	err := p.pool.QueryRow(ctx, `INSERT INTO workers (coin_id, workerfull, wallet, worker, server_id, created_at, updated_at, reward_method) 
+
+	id, err := p.GetWorkerIDByName(ctx, worker.Workerfull, worker.CoinID, worker.RewardMethod)
+	if err != nil {
+		return 0, err
+	}
+	if id > 0 {
+		return id, nil
+	}
+
+	err = p.pool.QueryRow(ctx, `INSERT INTO workers (coin_id, workerfull, wallet, worker, server_id, created_at, updated_at, reward_method) 
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		worker.CoinID, worker.Workerfull, worker.Wallet, worker.Worker, worker.ServerID, created_at, updated_at, worker.RewardMethod).Scan(&newID)
 
