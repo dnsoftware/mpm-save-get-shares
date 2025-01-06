@@ -32,10 +32,11 @@ func NewServiceSymmetric(serviceName string, validServicesList []string, secret 
 	return s
 }
 
-// ServiceName Получить имя JWT сервиса
-func (s *ServiceSymmetric) ServiceName() string {
-	return s.serviceName
-}
+// TODO удалить
+//// ServiceName Получить имя JWT сервиса
+//func (s *ServiceSymmetric) ServiceName() string {
+//	return s.serviceName
+//}
 
 // GenerateJWT создает JWT токен
 func (s *ServiceSymmetric) GenerateJWT() (string, error) {
