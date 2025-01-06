@@ -35,11 +35,18 @@ type GRPCConfig struct {
 	MinerTarget string `yaml:"miner_target" envconfig:"GRPC_MINER_TARGET" required:"true"` // хост:порт удаленного хранилища майнер/воркер
 }
 
+type AuthConfig struct {
+	JWTServiceName   string   `yaml:"jwt_service_name" envconfig:"JWT_SERVICE_NAME" required:"true"`          // Название сервиса (для сверки с JWTValidServices при авторизаии)
+	JWTSecret        string   `yaml:"jwt_secret" envconfig:"AUTH_JWT_SECRET" required:"true"`                 // JWT секрет
+	JWTValidServices []string `yaml:"jwt_valid_services" envconfig:"AUTH_JWT_VALID_SERVICES" required:"true"` // JWT секрет
+}
+
 type Config struct {
 	App               App                     `yaml:"application"`
 	KafkaShareReader  KafkaShareReaderConfig  `yaml:"kafka_share_reader"`
 	KafkaMetricWriter KafkaMetricWriterConfig `yaml:"kafka_metric_writer"`
 	GRPC              GRPCConfig              `yaml:"grpc"`
+	Auth              AuthConfig              `yaml:"auth"`
 }
 
 func New(filePath string, envFile string) (Config, error) {
@@ -73,15 +80,17 @@ func New(filePath string, envFile string) (Config, error) {
 	// 3. Чтение параметров командной строки
 	// Регистрируем флаги
 	kafkaShareBrokers := flag.String("kafka_share_brokers", "", "Хост для подключения")
+	jwtSecret := flag.String("js", "", "JWT secret")
 
-	// Устанавливаем тестовые аргументы
-	flag.CommandLine.Parse([]string{"-kafka_share_brokers=localhost:9092"})
+	// Устанавливаем тестовые аргументы (TODO убрать)
+	flag.CommandLine.Parse([]string{"-kafka_share_brokers=localhost:9092", "-js=jwtsecret"})
 
 	flag.Parse()
 
 	// для каждого аргумента проверяем не пустой ли он, и если не пустой - переопределяем переменную конфига
 	if *kafkaShareBrokers != "" {
 		config.KafkaShareReader.Brokers = strings.Split(*kafkaShareBrokers, ",")
+		config.Auth.JWTSecret = *jwtSecret
 	}
 
 	return config, nil

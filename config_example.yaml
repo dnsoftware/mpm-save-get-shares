@@ -18,3 +18,11 @@ kafka_metric_writer:
 grpc:
   coin_target: "127.0.0.1:17878"
   miner_target: "127.0.0.1:17878"
+
+auth:
+  jwt_service_name: "normalizer"
+  jwt_secret: "jwtsecret"
+  jwt_valid_services:
+    - "normalizer"
+    - "timeseries"
+
