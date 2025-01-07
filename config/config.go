@@ -38,7 +38,7 @@ type GRPCConfig struct {
 type AuthConfig struct {
 	JWTServiceName   string   `yaml:"jwt_service_name" envconfig:"JWT_SERVICE_NAME" required:"true"`          // Название сервиса (для сверки с JWTValidServices при авторизаии)
 	JWTSecret        string   `yaml:"jwt_secret" envconfig:"AUTH_JWT_SECRET" required:"true"`                 // JWT секрет
-	JWTValidServices []string `yaml:"jwt_valid_services" envconfig:"AUTH_JWT_VALID_SERVICES" required:"true"` // JWT секрет
+	JWTValidServices []string `yaml:"jwt_valid_services" envconfig:"AUTH_JWT_VALID_SERVICES" required:"true"` // список микросервисов (через запятую), которым разрешен доступ
 }
 
 type Config struct {

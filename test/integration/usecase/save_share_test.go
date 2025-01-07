@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dnsoftware/mpm-miners-processor/pkg/certmanager"
+	jwtauth "github.com/dnsoftware/mpm-miners-processor/pkg/jwt"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -18,7 +20,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dnsoftware/mpm-save-get-shares/config"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/clickhouse"
@@ -138,12 +139,6 @@ func TestSaveShareLocal(t *testing.T) {
 
 	}
 
-	/* предварительно пишем API функционала работы с удаленным справочниками Postgres и тесты к нему */
-	// Если в кеше нет данных - запрашиваем через API из Postgresql, расположенный во внешнем микросервисе
-
-	// Нормализуем данные по шаре
-	// Тесты к нормализации?
-
 	// Записываем данные через API в ClickHouse (используем буфер), расположенный во внешнем микросервисе
 
 	// Тестируем записанные данные путем их получения и сравнения с отправленными
@@ -151,6 +146,7 @@ func TestSaveShareLocal(t *testing.T) {
 }
 
 // Тестируем работу с удаленным микросервисом через API
+// Используем JWT и TLS
 // Удаленный микросервис должен быть запущен или же запускать его из теста (в контейнере), а после теста тушить
 func TestSaveShareRemote(t *testing.T) {
 	ctx := context.Background()
@@ -183,9 +179,18 @@ func TestSaveShareRemote(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
+
+	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
+
+	// Полномочия для TLS соединения
+	certMan, err := certmanager.NewCertManager(basePath + "/certs")
+	clientCreds, err := certMan.GetClientCredentials()
+
 	conn, err := grpc.DialContext(ctx,
 		cfg.GRPC.CoinTarget, // Адрес:порт
-		grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		//grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		grpc.WithTransportCredentials(*clientCreds), // Включаем TLS
+		grpc.WithUnaryInterceptor(jwt.GetClientInterceptor()),
 	)
 	require.NoError(t, err)
 
@@ -232,14 +237,6 @@ func TestSaveShareRemote(t *testing.T) {
 
 		span.End()
 	}
-
-	// Запрашиваем данные майнера/воркера из кеша ristretto
-
-	/* предварительно пишем API функционала работы со справочниками Postgres и тесты к нему */
-	// Если в кеше нет данных - запрашиваем через API из Postgresql, расположенный во внешнем микросервисе
-
-	// Нормализуем данные по шаре
-	// Тесты к нормализации?
 
 	// Записываем данные через API в ClickHouse (используем буфер), расположенный во внешнем микросервисе
 

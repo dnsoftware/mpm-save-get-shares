@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	jwtauth "github.com/dnsoftware/mpm-miners-processor/pkg/jwt"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,8 +40,10 @@ func TestGRPCStorageTest(t *testing.T) {
 		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 
+	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
+
 	// Coin
-	storage, err := pb.NewCoinStorage(conn)
+	storage, err := pb.NewCoinStorage(conn, jwt)
 	require.NoError(t, err)
 
 	ctx = context.Background()
@@ -49,7 +52,7 @@ func TestGRPCStorageTest(t *testing.T) {
 	require.Equal(t, int64(4), id)
 
 	// Miner
-	stor, err := pb.NewMinerStorage(conn)
+	stor, err := pb.NewMinerStorage(conn, jwt)
 	require.NoError(t, err)
 	newID, err := stor.CreateWallet(ctx, entity.Wallet{
 		CoinID:       4,

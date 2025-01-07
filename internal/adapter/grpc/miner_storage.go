@@ -12,13 +12,23 @@ import (
 type GRPCMinerStorage struct {
 	client proto.MinersServiceClient
 	conn   *grpc.ClientConn
+	//jwtProcessor JWTProcessor
+	//jwtToken     string
 }
 
-func NewMinerStorage(conn *grpc.ClientConn) (*GRPCMinerStorage, error) {
+func NewMinerStorage(conn *grpc.ClientConn /*, jwtProcessor JWTProcessor*/) (*GRPCMinerStorage, error) {
 	client := proto.NewMinersServiceClient(conn)
+
+	//token, err := jwtProcessor.GenerateJWT()
+	//if err != nil {
+	//	return nil, err
+	//}
+
 	return &GRPCMinerStorage{
 		client: client,
 		conn:   conn,
+		//jwtProcessor: jwtProcessor,
+		//jwtToken:     token,
 	}, nil
 }
 

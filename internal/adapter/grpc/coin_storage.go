@@ -11,15 +11,24 @@ import (
 type GRPCCoinStorage struct {
 	conn   *grpc.ClientConn
 	client proto.MinersServiceClient
+	//jwtProcessor JWTProcessor
+	//jwtToken     string
 }
 
-func NewCoinStorage(conn *grpc.ClientConn) (*GRPCCoinStorage, error) {
+func NewCoinStorage(conn *grpc.ClientConn /*, jwtProcessor JWTProcessor*/) (*GRPCCoinStorage, error) {
 
 	client := proto.NewMinersServiceClient(conn)
+
+	//token, err := jwtProcessor.GetActualToken()
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	return &GRPCCoinStorage{
 		client: client,
 		conn:   conn,
+		//jwtProcessor: jwtProcessor,
+		//jwtToken:     token,
 	}, nil
 }
 
