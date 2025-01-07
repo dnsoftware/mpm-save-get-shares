@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dnsoftware/mpm-miners-processor/pkg/certmanager"
 	jwtauth "github.com/dnsoftware/mpm-miners-processor/pkg/jwt"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dnsoftware/mpm-save-get-shares/config"
 	pb "github.com/dnsoftware/mpm-save-get-shares/internal/adapter/grpc"
@@ -30,20 +30,26 @@ func TestGRPCStorageTest(t *testing.T) {
 
 	cfg, err := config.New(configFile, envFile)
 
+	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
+
+	// Полномочия для TLS соединения
+	certMan, err := certmanager.NewCertManager(basePath + "/certs")
+	clientCreds, err := certMan.GetClientCredentials()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx,
 		cfg.GRPC.CoinTarget, // Адрес:порт
-		grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		//grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		grpc.WithTransportCredentials(*clientCreds), // Включаем TLS
+		grpc.WithUnaryInterceptor(jwt.GetClientInterceptor()),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 
-	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
-
 	// Coin
-	storage, err := pb.NewCoinStorage(conn, jwt)
+	storage, err := pb.NewCoinStorage(conn)
 	require.NoError(t, err)
 
 	ctx = context.Background()
@@ -52,7 +58,7 @@ func TestGRPCStorageTest(t *testing.T) {
 	require.Equal(t, int64(4), id)
 
 	// Miner
-	stor, err := pb.NewMinerStorage(conn, jwt)
+	stor, err := pb.NewMinerStorage(conn)
 	require.NoError(t, err)
 	newID, err := stor.CreateWallet(ctx, entity.Wallet{
 		CoinID:       4,
