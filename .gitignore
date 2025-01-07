@@ -5,3 +5,8 @@ app.log
 config.yaml
 sharesbin
 coverage.html
+
+/certs/*.crt
+/certs/*.key
+/certs/*.csr
+/certs/*.srl
