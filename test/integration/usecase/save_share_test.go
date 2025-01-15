@@ -22,12 +22,12 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dnsoftware/mpm-save-get-shares/config"
-	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/clickhouse"
 	pb "github.com/dnsoftware/mpm-save-get-shares/internal/adapter/grpc"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/postgres"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/ristretto"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/entity"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/usecase/share"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 	otelpkg "github.com/dnsoftware/mpm-save-get-shares/pkg/otel"
@@ -112,7 +112,7 @@ func TestSaveShareLocal(t *testing.T) {
 	require.NoError(t, err)
 
 	// ClickHouse
-	shareStorage, err := clickhouse.NewClickHouseShareStorage()
+	shareStorage, err := pb.NewShareStorage(&grpc.ClientConn{})
 	require.NoError(t, err)
 
 	usecase := share.NewShareUseCase(shareStorage, minerStorage, coinStorage, cacheMiner, cacheCoin)
@@ -147,7 +147,8 @@ func TestSaveShareLocal(t *testing.T) {
 
 // Тестируем работу с удаленным микросервисом через API
 // Используем JWT и TLS
-// Удаленный микросервис должен быть запущен или же запускать его из теста (в контейнере), а после теста тушить
+// Удаленный микросервис "Miner processor" должен быть запущен или же запускать его из теста (в контейнере), а после теста тушить
+// Удаленный микросервис "Shares timeseries" должен быть запущен или же запускать его из теста (в контейнере), а после теста тушить
 func TestSaveShareRemote(t *testing.T) {
 	ctx := context.Background()
 	_ = ctx
@@ -201,15 +202,23 @@ func TestSaveShareRemote(t *testing.T) {
 	cacheMiner, err := ristretto.NewRistrettoMinerStorage()
 	require.NoError(t, err)
 
-	// remote API
+	// remote API miners processor
 	coinStorage, err := pb.NewCoinStorage(conn)
 	require.NoError(t, err)
 
 	minerStorage, err := pb.NewMinerStorage(conn)
 	require.NoError(t, err)
 
-	// ClickHouse
-	shareStorage, err := clickhouse.NewClickHouseShareStorage()
+	//***** Remote ClickHouse shares timeseries
+	connShares, err := grpc.DialContext(ctx,
+		cfg.GRPC.SharesTarget, // Адрес:порт
+		//grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		grpc.WithTransportCredentials(*clientCreds), // Включаем TLS
+		grpc.WithUnaryInterceptor(jwt.GetClientInterceptor()),
+	)
+	require.NoError(t, err)
+
+	shareStorage, err := pb.NewShareStorage(connShares)
 	require.NoError(t, err)
 
 	usecase := share.NewShareUseCase(shareStorage, minerStorage, coinStorage, cacheMiner, cacheCoin)
@@ -220,6 +229,7 @@ func TestSaveShareRemote(t *testing.T) {
 	require.NoError(t, err)
 
 	// Тестируем удаленный API
+	sharesBatch := make([]entity.Share, 0, len(sfSlice))
 	for _, item := range sfSlice {
 
 		ctx, span := tracer.Start(context.Background(), "ProcessShare")
@@ -236,9 +246,18 @@ func TestSaveShareRemote(t *testing.T) {
 		require.Equal(t, int64(4), normShare.CoinID)
 
 		span.End()
+
+		// формируем пакет шар на отправку
+		sharesBatch = append(sharesBatch, normShare)
 	}
 
-	// Записываем данные через API в ClickHouse (используем буфер), расположенный во внешнем микросервисе
+	// Записываем данные через API в ClickHouse, расположенный во внешнем микросервисе
+	start := time.Now().UnixMicro()
+	err = usecase.AddSharesBatch(sharesBatch)
+	end := time.Now().UnixMicro()
+	require.NoError(t, err)
+
+	fmt.Println(fmt.Sprintf("%.6f", float64(end-start)/1000000))
 
 	// Тестируем записанные данные путем их получения и сравнения с отправленными
 

@@ -8,7 +8,7 @@ import (
 
 // SharesStorage сохранение шары в хранилище (ClickHouse)
 type ShareStorage interface {
-	CreateShare(share entity.Share) error // если возвращает nil - вставка прошла учпешно
+	AddSharesBatch(ctx context.Context, shares []entity.Share) error // если возвращает nil - вставка прошла учпешно
 }
 
 // MinerStorage сохранение/получение данных майнеров (кошельков) и воркеров в справочники в хранилище (Postgresql или кэш (ristretto))

@@ -1,12 +1,20 @@
 package share
 
 import (
-	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
+	"context"
+	"time"
+
+	"github.com/dnsoftware/mpm-save-get-shares/internal/entity"
 )
 
-// SaveShare сохранение шары в базе данных (ClickHouse)
+// AddSharesBatch сохранение шары в базе данных (ClickHouse)
 // Возвращает nil, если запись была добавлена успешно
-func (u *ShareUseCase) SaveShare(shareFound dto.ShareFound) error {
+func (u *ShareUseCase) AddSharesBatch(shares []entity.Share) error {
 
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := u.shareStorage.AddSharesBatch(ctx, shares)
+
+	return err
 }

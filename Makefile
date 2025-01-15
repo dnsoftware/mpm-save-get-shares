@@ -81,3 +81,4 @@ protogen:
 	# который нужно предварительно склонировать командой: git clone https://github.com/googleapis/googleapis.git в эту (или другую) директорию
 	# подробности читать тут: https://laradrom.ru/tag/proto/
 	protoc --go_out=. --go-grpc_out=. -I.  -I/home/dmitry/include/googleapis proto/miners.proto
+	protoc --go_out=. --go-grpc_out=. -I.  -I/home/dmitry/include/googleapis proto/shares.proto

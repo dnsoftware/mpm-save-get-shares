@@ -1,8 +1,6 @@
 package dto
 
 import (
-	"time"
-
 	"github.com/dnsoftware/mpm-save-get-shares/internal/entity"
 )
 
@@ -29,16 +27,13 @@ type ShareFound struct {
 // CoinID, WorkerID, WalletID - заполняются потом
 func (s *ShareFound) ToShare() entity.Share {
 
-	// Создаем объект времени из миллисекунд
-	t := time.UnixMilli(s.ShareDate)
-
 	share := entity.Share{
 		UUID:         s.Uuid,
 		ServerID:     s.ServerID,
 		CoinID:       0, // заполняется в usecase
 		WorkerID:     0, // заполняется в usecase
 		WalletID:     0, // заполняется в usecase
-		ShareDate:    t.Format("2006-01-02 15:04:05.999"),
+		ShareDate:    s.ShareDate,
 		Difficulty:   s.Difficulty,
 		Sharedif:     s.Sharedif,
 		Nonce:        s.Nonce,

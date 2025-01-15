@@ -24,5 +24,6 @@ func TestConfigNew(t *testing.T) {
 
 	assert.Equal(t, constants.KafkaSharesTopic, cfg.KafkaShareReader.Topic)
 	assert.Equal(t, "127.0.0.1:7878", cfg.GRPC.CoinTarget)
+	assert.Equal(t, "127.0.0.1:6878", cfg.GRPC.SharesTarget)
 
 }

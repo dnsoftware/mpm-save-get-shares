@@ -31,8 +31,9 @@ type KafkaMetricWriterConfig struct {
 }
 
 type GRPCConfig struct {
-	CoinTarget  string `yaml:"coin_target" envconfig:"GRPC_COIN_TARGET" required:"true"`   // хост:порт удаленного хранилища Coin
-	MinerTarget string `yaml:"miner_target" envconfig:"GRPC_MINER_TARGET" required:"true"` // хост:порт удаленного хранилища майнер/воркер
+	CoinTarget   string `yaml:"coin_target" envconfig:"GRPC_COIN_TARGET" required:"true"`     // хост:порт удаленного хранилища Coin
+	MinerTarget  string `yaml:"miner_target" envconfig:"GRPC_MINER_TARGET" required:"true"`   // хост:порт удаленного хранилища майнер/воркер
+	SharesTarget string `yaml:"shares_target" envconfig:"GRPC_SHARES_TARGET" required:"true"` // хост:порт удаленного хранилища shares timeseries
 }
 
 type AuthConfig struct {

@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/IBM/sarama"
+	"github.com/dnsoftware/mpm-miners-processor/pkg/certmanager"
+	jwtauth "github.com/dnsoftware/mpm-miners-processor/pkg/jwt"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -17,14 +18,20 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"go.opentelemetry.io/otel"
+	"google.golang.org/grpc"
 
+	"github.com/dnsoftware/mpm-save-get-shares/config"
+	pb "github.com/dnsoftware/mpm-save-get-shares/internal/adapter/grpc"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/kafka_consumer/shares"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/adapter/ristretto"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
+	"github.com/dnsoftware/mpm-save-get-shares/internal/usecase/share"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_writer"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 	otelpkg "github.com/dnsoftware/mpm-save-get-shares/pkg/otel"
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/utils"
 	tctest "github.com/dnsoftware/mpm-save-get-shares/test/testcontainers"
 )
 
@@ -125,19 +132,96 @@ func TestConsumerGetShares(t *testing.T) {
 
 	reader, err := kafka_reader.NewKafkaReader(cfgReader, logger.Log())
 	assert.NoError(t, err)
-	defer reader.Close()
 
-	// Читаем сообщение
-	msgChan := make(chan *sarama.ConsumerMessage)
+	/********** Подготовка usecase **********/
+	ctx := context.Background()
+	_ = ctx
 
-	//	shareUseCase := share.NewShareUseCase()
-	handler := &shares.ShareConsumer{
-		MsgChan: msgChan,
+	filePath, err := logger.GetLoggerTestLogPath()
+	require.NoError(t, err)
+	logger.InitLogger(logger.LogLevelDebug, filePath)
+
+	otelConfig := otelpkg.Config{
+		ServiceName:        "TestService",
+		CollectorEndpoint:  "localhost:4317",
+		BatchTimeout:       1 * time.Second,
+		MaxExportBatchSize: 100,
+		MaxQueueSize:       500,
 	}
+	_ = otelpkg.InitTracer(otelConfig)
+	//defer cleanup()
+	tracer := otel.Tracer("share-trace")
+	_ = tracer
 
-	go func() {
-		reader.ConsumeMessages(handler)
-	}()
+	basePath, err := utils.GetProjectRoot(constants.ProjectRootAnchorFile)
+	if err != nil {
+		log.Fatalf("GetProjectRoot failed: %s", err.Error())
+	}
+	configFile := basePath + "/config.yaml"
+	envFile := basePath + "/.env_example"
+
+	cfg, err := config.New(configFile, envFile)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
+
+	// Полномочия для TLS соединения
+	certMan, err := certmanager.NewCertManager(basePath + "/certs")
+	clientCreds, err := certMan.GetClientCredentials()
+
+	conn, err := grpc.DialContext(ctx,
+		cfg.GRPC.CoinTarget, // Адрес:порт
+		//grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		grpc.WithTransportCredentials(*clientCreds), // Включаем TLS
+		grpc.WithUnaryInterceptor(jwt.GetClientInterceptor()),
+	)
+	require.NoError(t, err)
+
+	// Ristretto кэш
+	cacheCoin, err := ristretto.NewRistrettoCoinStorage()
+	require.NoError(t, err)
+
+	cacheMiner, err := ristretto.NewRistrettoMinerStorage()
+	require.NoError(t, err)
+
+	// remote API miners processor
+	coinStorage, err := pb.NewCoinStorage(conn)
+	require.NoError(t, err)
+
+	minerStorage, err := pb.NewMinerStorage(conn)
+	require.NoError(t, err)
+
+	//***** Remote ClickHouse shares timeseries
+	connShares, err := grpc.DialContext(ctx,
+		cfg.GRPC.SharesTarget, // Адрес:порт
+		//grpc.WithTransportCredentials(insecure.NewCredentials()), // Отключаем TLS
+		grpc.WithTransportCredentials(*clientCreds), // Включаем TLS
+		grpc.WithUnaryInterceptor(jwt.GetClientInterceptor()),
+	)
+	require.NoError(t, err)
+
+	shareStorage, err := pb.NewShareStorage(connShares)
+	require.NoError(t, err)
+
+	usecase := share.NewShareUseCase(shareStorage, minerStorage, coinStorage, cacheMiner, cacheCoin)
+
+	/**************** Конец usecase ****************/
+
+	cfgConsumer := shares.Config{
+		BatchSize:     10,
+		FlushInterval: 1,
+	}
+	consumer, err := shares.NewShareConsumer(cfgConsumer, reader, usecase)
+	require.NoError(t, err)
+	defer consumer.Close()
+
+	// Стартуем вычитывание сообщений
+	consumer.StartConsume()
+
+	// Получаем канал с вычитанными сообщениями (для теста ниже)
+	msgChan := consumer.GetConsumeChan()
 
 	// Получаем сообщение и делаем тестовые сравнения
 	var item dto.ShareFound
