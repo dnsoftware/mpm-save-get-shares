@@ -3,6 +3,8 @@ package shares
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -12,6 +14,7 @@ import (
 	"github.com/dnsoftware/mpm-save-get-shares/internal/dto"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/entity"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/kafka_reader"
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 )
 
 type Config struct {
@@ -26,6 +29,7 @@ type Processor interface {
 
 // ShareConsumer реализует интерфейс sarama.ConsumerGroupHandler
 type ShareConsumer struct {
+	cfg         Config
 	kafkaReader *kafka_reader.KafkaReader
 	msgChan     chan *sarama.ConsumerMessage
 	Processor
@@ -33,6 +37,7 @@ type ShareConsumer struct {
 
 func NewShareConsumer(cfg Config, kafkaReader *kafka_reader.KafkaReader, processor Processor) (*ShareConsumer, error) {
 	return &ShareConsumer{
+		cfg:         cfg,
 		kafkaReader: kafkaReader,
 		msgChan:     make(chan *sarama.ConsumerMessage),
 		Processor:   processor,
@@ -49,9 +54,9 @@ func (consumer *ShareConsumer) StartConsume() {
 }
 
 // GetConsumeChan возвращает канал куда пишуться считанные сообщения
-func (consumer *ShareConsumer) GetConsumeChan() chan *sarama.ConsumerMessage {
-	return consumer.msgChan
-}
+//func (consumer *ShareConsumer) GetConsumeChan() chan *sarama.ConsumerMessage {
+//	return consumer.msgChan
+//}
 
 func (consumer *ShareConsumer) Close() {
 	consumer.kafkaReader.Close()
@@ -70,6 +75,11 @@ func (consumer *ShareConsumer) Cleanup(session sarama.ConsumerGroupSession) erro
 // ConsumeClaim обрабатывает сообщения из партиций (интерфейс ConsumerGroupHandler)
 // если используем канал consumer.MsgChan (или какой-то подобный) - нужно его вычитывать снаружи
 func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+
+	var item dto.ShareFound
+	var batch []*sarama.ConsumerMessage // Буфер для пакетного чтения
+	timer := time.NewTimer(consumer.cfg.FlushInterval)
+
 	for msg := range claim.Messages() {
 
 		// Создаем carrier для извлечения заголовков
@@ -80,25 +90,71 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			carrier[string(header.Key)] = string(header.Value)
 		}
 		ctx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
-
 		tracer := otel.Tracer("consume-share")
 		ctx, span := tracer.Start(ctx, "process")
 
-		consumer.msgChan <- msg
-		// Тут идет вызов usecase
+		// Функция для обработки пакета
+		processBatch := func() error {
+			if len(batch) > 0 {
+				sharesBatch := make([]entity.Share, 0, len(batch))
+
+				logger.Log().Info(fmt.Sprintf("Processing batch of %d messages", len(batch)))
+				for _, mess := range batch {
+					err := json.Unmarshal(mess.Value, &item)
+					normShare, err := consumer.NormalizeShare(ctx, item)
+					if err != nil {
+						logger.Log().Error("NormalizeShare error: " + err.Error())
+						return fmt.Errorf("NormalizeShare error: %s", err.Error())
+					}
+					sharesBatch = append(sharesBatch, normShare)
+				}
+
+				err := consumer.AddSharesBatch(sharesBatch)
+				if err != nil {
+					return err
+				}
+
+				// Помечаем смещения для пакета как прочитанные
+				session.MarkOffset(batch[len(batch)-1].Topic, batch[len(batch)-1].Partition, batch[len(batch)-1].Offset+1, "")
+				batch = nil // Очищаем пакет после обработки
+			}
+			timer.Reset(consumer.cfg.FlushInterval) // Сбрасываем таймер
+
+			return nil
+		}
+
+		for {
+			select {
+			case message := <-claim.Messages():
+				batch = append(batch, message)
+				if len(batch) >= consumer.cfg.BatchSize {
+					err := processBatch()
+					if err != nil {
+						return err
+					}
+				}
+			case <-timer.C:
+				// Если сработал таймер, обрабатываем текущий пакет
+				err := processBatch()
+				if err != nil {
+					return err
+				}
+
+			case <-session.Context().Done():
+				// Завершаем работу при остановке сессии
+				return nil
+			}
+		}
+
+		//consumer.msgChan <- msg
 
 		// Если сообщение успешно обработано - помечаем, как обработанное TODO
-		session.MarkMessage(msg, "")
+		// session.MarkMessage(msg, "")
 		// иначе - логируем ошибку и делаем пометку "алерт" TODO
 		// ...
 
 		span.End()
 	}
+
 	return nil
-}
-
-// NormalizeShare Обработчик шары
-// Получение кодов майнеров/воркеров из кеша или из Postgres
-func (consumer *ShareConsumer) NormalizeShare(shareData []byte) {
-
 }
