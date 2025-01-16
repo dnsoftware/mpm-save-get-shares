@@ -3,6 +3,7 @@ package kafka_writer
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -75,8 +76,8 @@ func (k *KafkaWriter) Start() {
 	go func() {
 		defer k.wg.Done()
 		for success := range k.producer.Successes() {
-			// делаем какое-то действие, если необходимо
-			_ = success
+			// TODO удалить для ускорения
+			log.Printf("Сообщение успешно отправлено в партицию %d, с оффсетом %d", success.Partition, success.Offset)
 		}
 	}()
 
