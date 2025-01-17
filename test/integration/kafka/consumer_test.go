@@ -111,7 +111,7 @@ func setup(t *testing.T) []string {
 	return brokers
 }
 
-// Тестируем получение шар из Кафки
+// Тестируем получение шар из Кафки и отправку их в удаленную базу Clickhouse
 func TestConsumerGetShares(t *testing.T) {
 
 	var topic string = "topic_test"
@@ -164,7 +164,7 @@ func TestConsumerGetShares(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
+	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret, 60)
 
 	// Полномочия для TLS соединения
 	certMan, err := certmanager.NewCertManager(basePath + "/certs")
@@ -209,8 +209,8 @@ func TestConsumerGetShares(t *testing.T) {
 	/**************** Конец usecase ****************/
 
 	cfgConsumer := shares.Config{
-		BatchSize:     10,
-		FlushInterval: 10,
+		BatchSize:     5,
+		FlushInterval: 1,
 	}
 	consumer, err := shares.NewShareConsumer(cfgConsumer, reader, usecase)
 	require.NoError(t, err)
@@ -239,6 +239,7 @@ func TestConsumerGetShares(t *testing.T) {
 	//		}
 	//	}
 
+	time.Sleep(5 * time.Second)
 }
 
 var testData string = `[{"uuid":"23c4567b-f8e4-473f-bd06-a0ff8b295e82","blockType":"share_found","serverId":"EU-HSHP-ALPH-1","coinSymbol":"ALPH","workerfull":"15DPDpMdvB3iKzS3mVykxPqSyvE3SdArSUeE98vwyoyKe.test_local","shareDate":1734885835318,"cHrate":0,"aHrate":0,"difficulty":"0.002649","sharedif":"0.003806","nonce":"9c44020300030000020003000104030400010401546c0600","minerIp":"127.0.0.1","isSolo":false,"rewardMethod":"PPLNS","cost":"0.000000"}, 

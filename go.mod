@@ -38,7 +38,7 @@ require (
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/dnsoftware/mpm-miners-processor v0.0.3 // indirect
+	github.com/dnsoftware/mpm-miners-processor v0.0.4-0.20250117064752-90d70051a6ca // indirect
 	github.com/docker/docker v27.2.0+incompatible // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect

@@ -5,7 +5,8 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.idea" />
       <excludePattern pattern="test.log" />
-      <excludePattern pattern="coverpage.html" />
+      <excludePattern pattern="coverage.html" />
+      <excludePattern pattern="*.log" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

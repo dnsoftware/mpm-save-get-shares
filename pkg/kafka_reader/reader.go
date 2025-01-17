@@ -45,6 +45,13 @@ func NewKafkaReader(cfg Config, logger logger.MPMLogger) (*KafkaReader, error) {
 		return nil, err
 	}
 
+	// Обработка ошибок в отдельной горутине
+	go func() {
+		for err := range consumerGroup.Errors() {
+			log.Printf("Error: %v", err)
+		}
+	}()
+
 	admin, err := sarama.NewClusterAdmin(cfg.Brokers, config)
 	if err != nil {
 		log.Fatalf("Ошибка при создании ClusterAdmin: %v", err)

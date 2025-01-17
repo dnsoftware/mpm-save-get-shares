@@ -9,6 +9,8 @@ kafka_share_reader:
   topic: "shares"
   auto_commit_enable: true
   auto_commit_interval: 5
+  read_batch_size: 1000
+  read_flush_interval: 1
 
 kafka_metric_writer:
   brokers:
@@ -27,3 +29,8 @@ auth:
     - "normalizer"
     - "timeseries"
 
+otel:
+  endpoint: "localhost:4317"
+  batch_timeout: 1   # таймоут отправки телеметрических пакетов в секундах
+  max_export_batch_size: 100 # максимальное кол-во сообщений в пакете
+  max_queue_size: 500 # Максимум спанов в очереди

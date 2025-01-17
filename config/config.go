@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -18,11 +19,13 @@ type App struct {
 }
 
 type KafkaShareReaderConfig struct {
-	Brokers            []string `yaml:"brokers" envconfig:"KAFKA_SHARE_READER_BROKERS" required:"true"`
-	Group              string   `yaml:"group" envconfig:"KAFKA_SHARE_READER_GROUP" required:"true"`
-	Topic              string   `yaml:"topic" envconfig:"KAFKA_SHARE_READER_TOPIC" required:"true"`
-	AutoCommitEnable   bool     `yaml:"auto_commit_enable" envconfig:"KAFKA_SHARE_AUTO_COMMIT_ENABLE" required:"true"`
-	AutoCommitInterval int      `yaml:"auto_commit_interval" envconfig:"KAFKA_SHARE_AUTO_COMMIT_INTERVAL" required:"true"` // в секундах
+	Brokers            []string      `yaml:"brokers" envconfig:"KAFKA_SHARE_READER_BROKERS" required:"true"`
+	Group              string        `yaml:"group" envconfig:"KAFKA_SHARE_READER_GROUP" required:"true"`
+	Topic              string        `yaml:"topic" envconfig:"KAFKA_SHARE_READER_TOPIC" required:"true"`
+	AutoCommitEnable   bool          `yaml:"auto_commit_enable" envconfig:"KAFKA_SHARE_AUTO_COMMIT_ENABLE" required:"true"`
+	AutoCommitInterval int           `yaml:"auto_commit_interval" envconfig:"KAFKA_SHARE_AUTO_COMMIT_INTERVAL" required:"true"` // в секундах
+	ReadBatchSize      int           `yaml:"read_batch_size"`
+	ReadFlushInterval  time.Duration `yaml:"read_flush_interval"`
 }
 
 type KafkaMetricWriterConfig struct {
@@ -42,12 +45,20 @@ type AuthConfig struct {
 	JWTValidServices []string `yaml:"jwt_valid_services" envconfig:"AUTH_JWT_VALID_SERVICES" required:"true"` // список микросервисов (через запятую), которым разрешен доступ
 }
 
+type OtelConfig struct {
+	Endpoint           string        `yaml:"endpoint"`
+	BatchTimeout       time.Duration `yaml:"batch_timeout"`         // таймоут отправки телеметрических пакетов в секундах
+	MaxExportBatchSize int           `yaml:"max_export_batch_size"` // максимальное кол-во сообщений в пакете
+	MaxQueueSize       int           `yaml:"max_queue_size"`        // максимум спанов в очереди
+}
+
 type Config struct {
 	App               App                     `yaml:"application"`
 	KafkaShareReader  KafkaShareReaderConfig  `yaml:"kafka_share_reader"`
 	KafkaMetricWriter KafkaMetricWriterConfig `yaml:"kafka_metric_writer"`
 	GRPC              GRPCConfig              `yaml:"grpc"`
 	Auth              AuthConfig              `yaml:"auth"`
+	Otel              OtelConfig              `yaml:"otel"`
 }
 
 func New(filePath string, envFile string) (Config, error) {

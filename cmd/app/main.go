@@ -7,6 +7,7 @@ import (
 	"github.com/dnsoftware/mpm-save-get-shares/config"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/app"
 	"github.com/dnsoftware/mpm-save-get-shares/internal/constants"
+	"github.com/dnsoftware/mpm-save-get-shares/pkg/logger"
 	"github.com/dnsoftware/mpm-save-get-shares/pkg/utils"
 )
 
@@ -22,8 +23,14 @@ func main() {
 
 	cfg, err := config.New(configFile, envFile)
 	if err != nil {
-
+		log.Fatalf("Main config failed: %s", err.Error())
 	}
+
+	filePath, err := logger.GetLoggerMainLogPath()
+	if err != nil {
+		panic("Bad logger init: " + err.Error())
+	}
+	logger.InitLogger(logger.LogLevelDebug, filePath)
 
 	err = app.Run(ctx, cfg)
 

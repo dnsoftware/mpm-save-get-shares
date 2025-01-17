@@ -42,6 +42,10 @@ github.com/dnsoftware/mpm-miners-processor v0.0.2 h1:VDHcr/X70fE1VxkzwR74W7A2RSN
 github.com/dnsoftware/mpm-miners-processor v0.0.2/go.mod h1:OKRd1/nV1ekukXDIXtmHv7ecSFS6TBJ0AHeeJKTM1wA=
 github.com/dnsoftware/mpm-miners-processor v0.0.3 h1:ml7gYNqAfyOQqB9/T09LJMX+Gx1lBUbxRQPdAw5B0Y4=
 github.com/dnsoftware/mpm-miners-processor v0.0.3/go.mod h1:OKRd1/nV1ekukXDIXtmHv7ecSFS6TBJ0AHeeJKTM1wA=
+github.com/dnsoftware/mpm-miners-processor v0.0.4-0.20250116212727-b912edfff8fa h1:DsK74IMV2OhCi6I11NEqe/z9wuoDnG4FVhzxjKEQrSw=
+github.com/dnsoftware/mpm-miners-processor v0.0.4-0.20250116212727-b912edfff8fa/go.mod h1:OKRd1/nV1ekukXDIXtmHv7ecSFS6TBJ0AHeeJKTM1wA=
+github.com/dnsoftware/mpm-miners-processor v0.0.4-0.20250117064752-90d70051a6ca h1:y1qIAvLoYQkXDmnmSHpEZNjqLUDreFwJqb2doDeNEik=
+github.com/dnsoftware/mpm-miners-processor v0.0.4-0.20250117064752-90d70051a6ca/go.mod h1:OKRd1/nV1ekukXDIXtmHv7ecSFS6TBJ0AHeeJKTM1wA=
 github.com/docker/docker v27.2.0+incompatible h1:Rk9nIVdfH3+Vz4cyI/uhbINhEZ/oLmc+CBXmH6fbNk4=
 github.com/docker/docker v27.2.0+incompatible/go.mod h1:eEKB0N0r5NX/I1kEveEz05bcu8tLC/8azJZsviup8Sk=
 github.com/docker/go-connections v0.5.0 h1:USnMq7hx7gwdVZq1L49hLXaFtUdTADjXGp+uj1Br63c=

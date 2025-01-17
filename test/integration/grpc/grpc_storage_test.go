@@ -30,7 +30,7 @@ func TestGRPCStorageTest(t *testing.T) {
 
 	cfg, err := config.New(configFile, envFile)
 
-	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret)
+	jwt := jwtauth.NewJWTServiceSymmetric(cfg.Auth.JWTServiceName, cfg.Auth.JWTValidServices, cfg.Auth.JWTSecret, 60)
 
 	// Полномочия для TLS соединения
 	certMan, err := certmanager.NewCertManager(basePath + "/certs")

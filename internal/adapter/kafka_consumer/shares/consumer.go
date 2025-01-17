@@ -78,7 +78,7 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 
 	var item dto.ShareFound
 	var batch []*sarama.ConsumerMessage // Буфер для пакетного чтения
-	timer := time.NewTimer(consumer.cfg.FlushInterval)
+	timer := time.NewTimer(consumer.cfg.FlushInterval * time.Second)
 
 	for msg := range claim.Messages() {
 
@@ -98,8 +98,13 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			if len(batch) > 0 {
 				sharesBatch := make([]entity.Share, 0, len(batch))
 
+				start := time.Now().UnixMilli()
 				logger.Log().Info(fmt.Sprintf("Processing batch of %d messages", len(batch)))
 				for _, mess := range batch {
+					if mess == nil {
+						fmt.Println("batch message nil")
+						continue
+					}
 					err := json.Unmarshal(mess.Value, &item)
 					normShare, err := consumer.NormalizeShare(ctx, item)
 					if err != nil {
@@ -108,6 +113,8 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 					}
 					sharesBatch = append(sharesBatch, normShare)
 				}
+				end := time.Now().UnixMilli()
+				fmt.Println(fmt.Sprintf("Batch time: %v", end-start))
 
 				err := consumer.AddSharesBatch(sharesBatch)
 				if err != nil {
@@ -117,15 +124,25 @@ func (consumer *ShareConsumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 				// Помечаем смещения для пакета как прочитанные
 				session.MarkOffset(batch[len(batch)-1].Topic, batch[len(batch)-1].Partition, batch[len(batch)-1].Offset+1, "")
 				batch = nil // Очищаем пакет после обработки
+
 			}
-			timer.Reset(consumer.cfg.FlushInterval) // Сбрасываем таймер
+			timer.Reset(consumer.cfg.FlushInterval * time.Second) // Сбрасываем таймер
 
 			return nil
 		}
 
 		for {
 			select {
-			case message := <-claim.Messages():
+			case message, ok := <-claim.Messages():
+				if !ok {
+					fmt.Println("Channel claim.Messages() closed")
+					return nil
+				}
+
+				if message == nil {
+					fmt.Println("claim.Messages nil")
+					continue
+				}
 				batch = append(batch, message)
 				if len(batch) >= consumer.cfg.BatchSize {
 					err := processBatch()

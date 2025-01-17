@@ -10,3 +10,4 @@ coverage.html
 /certs/*.key
 /certs/*.csr
 /certs/*.srl
+/save-get-shares
